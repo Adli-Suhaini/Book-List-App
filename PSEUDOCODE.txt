@@ -1,0 +1,212 @@
+PROGRAM BookListApp
+
+// ============ MAIN APP COMPONENT ============
+COMPONENT App:
+    // STATE VARIABLES
+    books = []                    // All books from JSON
+    searchTerm = ""              // Search input value
+    filters = {                  // Filter options
+        country: "",
+        language: "",
+        century: "",
+        pageRange: "",
+        sortBy: "title"
+    }
+    currentPage = 1              // Current pagination page
+    itemsPerPage = 20           // Items to show per page
+
+    // INITIALIZATION
+    ON COMPONENT_MOUNT:
+        FETCH books.json
+        SET books = fetched_data
+        HANDLE any errors
+
+    // RESET PAGINATION WHEN FILTERS CHANGE
+    ON searchTerm OR filters CHANGE:
+        SET currentPage = 1
+
+    // FILTERING AND SEARCHING LOGIC
+    FUNCTION filterBooks():
+        filteredBooks = []
+        
+        FOR each book in books:
+            // Search matching
+            searchMatch = (searchTerm is empty) OR
+                         (book.title contains searchTerm) OR
+                         (book.author contains searchTerm) OR
+                         (book.country contains searchTerm)
+            
+            // Filter matching
+            countryMatch = (filter.country is empty) OR (book.country equals filter.country)
+            languageMatch = (filter.language is empty) OR (book.language equals filter.language)
+            pageRangeMatch = (filter.pageRange is empty) OR (book.pageRange equals filter.pageRange)
+            centuryMatch = (filter.century is empty) OR (book.century equals filter.century)
+            
+            IF searchMatch AND countryMatch AND languageMatch AND pageRangeMatch AND centuryMatch:
+                ADD book to filteredBooks
+        
+        // SORTING
+        SORT filteredBooks based on filters.sortBy:
+            CASE "author": sort by author name
+            CASE "year": sort by year (descending)
+            CASE "pages": sort by page count (descending)
+            CASE "country": sort by country name
+            DEFAULT: sort by title
+        
+        RETURN filteredBooks
+
+    // PAGINATION LOGIC
+    FUNCTION paginateBooks(filteredBooks):
+        totalBooks = filteredBooks.length
+        totalPages = CEILING(totalBooks / itemsPerPage)
+        startIndex = (currentPage - 1) * itemsPerPage
+        endIndex = startIndex + itemsPerPage
+        currentPageBooks = filteredBooks.slice(startIndex, endIndex)
+        
+        RETURN {
+            books: currentPageBooks,
+            totalBooks: totalBooks,
+            totalPages: totalPages,
+            startIndex: startIndex,
+            endIndex: endIndex
+        }
+
+    // EVENT HANDLERS
+    FUNCTION onSearchChange(newSearchTerm):
+        SET searchTerm = newSearchTerm
+
+    FUNCTION onFiltersChange(newFilters):
+        SET filters = newFilters
+
+    FUNCTION onPageChange(newPage):
+        SET currentPage = newPage
+        SCROLL to top of page
+
+    FUNCTION onItemsPerPageChange(newItemsPerPage):
+        SET itemsPerPage = newItemsPerPage
+        SET currentPage = 1
+
+    // RENDER
+    FUNCTION render():
+        filteredBooks = filterBooks()
+        paginationData = paginateBooks(filteredBooks)
+        
+        DISPLAY:
+            Header(searchTerm, onSearchChange)
+            Filters(books, filters, onFiltersChange)
+            
+            IF paginationData.totalBooks > 0:
+                SHOW results summary
+                FOR each book in paginationData.books:
+                    DISPLAY BookListItem(book)
+                DISPLAY Pagination(paginationData, onPageChange, onItemsPerPageChange)
+            ELSE:
+                DISPLAY "No books found" message
+
+// ============ HEADER COMPONENT ============
+COMPONENT Header(searchTerm, setSearchTerm):
+    RENDER:
+        App title
+        Search input field with icon
+        ON search input change: CALL setSearchTerm
+
+// ============ FILTERS COMPONENT ============
+COMPONENT Filters(books, filters, setFilters):
+    // GENERATE FILTER OPTIONS
+    countries = UNIQUE values from books.country, sorted
+    languages = UNIQUE values from books.language, sorted
+    centuries = UNIQUE values from books.year converted to centuries, sorted
+    pageRanges = UNIQUE values from books.pages converted to ranges, sorted
+
+    // UTILITY FUNCTIONS
+    FUNCTION getCentury(year):
+        IF year < 0:
+            RETURN CEILING(ABS(year) / 100) * -1
+        ELSE:
+            RETURN CEILING(year / 100)
+
+    FUNCTION formatCentury(century):
+        IF century < 0:
+            RETURN "{ABS(century)}th century BCE"
+        ELSE:
+            RETURN "{century}{suffix} century CE"
+
+    FUNCTION getPageRange(pages):
+        RETURN CEILING(pages / 100)
+
+    FUNCTION formatPageRange(range):
+        start = (range - 1) * 100 + 1
+        end = range * 100
+        RETURN "{start}-{end} pages"
+
+    RENDER:
+        Filter section header
+        Country dropdown (countries options)
+        Language dropdown (languages options)
+        Page Range dropdown (pageRanges options)
+        Century dropdown (centuries options)
+        Sort By dropdown (title, author, year, pages, country)
+        Clear filters button (if any filters active)
+
+// ============ BOOK LIST ITEM COMPONENT ============
+COMPONENT BookListItem(book):
+    imageError = false
+
+    FUNCTION onImageError():
+        SET imageError = true
+
+    RENDER:
+        Book card container
+        IF imageError is false:
+            DISPLAY book image
+        ELSE:
+            DISPLAY placeholder book icon
+        
+        Book details:
+            Title and author
+            Year
+            Country, language, page count with icons
+            External link
+
+// ============ PAGINATION COMPONENT ============
+COMPONENT Pagination(currentPage, totalPages, itemsPerPage, totalItems, onPageChange, onItemsPerPageChange):
+    
+    FUNCTION getPageNumbers():
+        // Generate smart page number display with ellipsis
+        delta = 2
+        range = pages around current page within delta
+        
+        IF gap before current range:
+            ADD 1, "..."
+        ELSE:
+            ADD 1
+        
+        ADD range pages
+        
+        IF gap after current range:
+            ADD "...", totalPages
+        ELSE IF totalPages > 1:
+            ADD totalPages
+        
+        RETURN page numbers array
+
+    RENDER:
+        Items per page selector (20, 50, 100 options)
+        
+        IF totalPages > 1:
+            First page button
+            Previous page button
+            Page number buttons (with ellipsis)
+            Next page button
+            Last page button
+        
+        Current page info display
+
+// ============ MAIN EXECUTION ============
+INITIALIZE React App
+RENDER App component
+HANDLE user interactions
+UPDATE state based on user actions
+RE-RENDER components when state changes
+
+END PROGRAM
